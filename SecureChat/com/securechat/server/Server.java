@@ -39,7 +39,7 @@ public class Server implements Runnable{
 				activeConnections.add(sock);
 				
 				Thread clientHandlerThread = new Thread(new ClientHandler(sock));
-				
+				clientHandlerThread.run();
 				
 			}
 		} catch(SocketTimeoutException to){
@@ -98,6 +98,8 @@ public class Server implements Runnable{
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+			
+			// TODO: close the socket, remove from available clients, kill thread
 		}
 		
 		private void sendMessage(String message){

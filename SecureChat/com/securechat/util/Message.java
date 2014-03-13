@@ -8,6 +8,7 @@ import com.google.gson.Gson;
 
 public class Message {
 
+	// TODO: These properties will change depending on the encrypted data and how we want to send stuff
 	private String messageString;
 	private Key randomKey;
 	
@@ -19,7 +20,7 @@ public class Message {
 		
 		// TODO: Implement this
 		
-		// Must use the Gson library to return a JSON string, we'll send that on the wire
+		// Must use the Gson library to return a JSON string, we'll send that on the wire Gson.toJSON(this)
 		
 		return null;
 	}
