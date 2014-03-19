@@ -4,14 +4,8 @@ import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
@@ -25,19 +19,12 @@ public class Encryption {
 	 * Returns an array of keys. [0] = private key, [1] = public key
 	 * @return
 	 */
-	public static Key[] generateKeyPair(){
+	public static KeyPair generateKeyPair(){
 		try {
-			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("DiffieHellman");
-			SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-			keyGen.initialize(1024, random);
+			KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+			keyGen.initialize(512);
 			
-			KeyPair pair = keyGen.generateKeyPair();
-			PrivateKey priv = pair.getPrivate();
-			PublicKey pub = pair.getPublic();
-			
-			Key[] keys = {priv,pub};
-			
-			return keys;
+			return keyGen.generateKeyPair();
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		}
@@ -48,9 +35,8 @@ public class Encryption {
 	public static Key generateRandomKey() {
 		KeyGenerator keyGen;
 		try {
-			keyGen = KeyGenerator.getInstance("HmacSHA256");
-			SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-			keyGen.init(1024, random);
+			keyGen = KeyGenerator.getInstance("AES");
+			keyGen.init(512);
 			
 			return keyGen.generateKey();
 		} catch (NoSuchAlgorithmException e) {
@@ -60,12 +46,12 @@ public class Encryption {
 		return null;
 	}
 	
-	public static String encryptMessage(String message, Key key){
-		return doEncryptDecrypt(message.getBytes(), key, Cipher.ENCRYPT_MODE).toString();
+	public static byte[] encryptMessage(String message, Key key, String algorithm){
+		return doEncryptDecrypt(message.getBytes(), key, Cipher.ENCRYPT_MODE, algorithm);
 	}
 	
-	public static String decryptMessage(String message, Key key){	
-		return doEncryptDecrypt(message.getBytes(), key, Cipher.DECRYPT_MODE).toString();
+	public static byte[] decryptMessage(String message, Key key, String algorithm){	
+		return doEncryptDecrypt(message.getBytes(), key, Cipher.DECRYPT_MODE, algorithm);
 	}
 	
 	/**
@@ -74,14 +60,13 @@ public class Encryption {
 	 * @param key
 	 * @return
 	 */
-	public static String encryptKey(Key keyToBeEncrypted, Key key){
+	public static byte[] encryptKey(Key keyToBeEncrypted, Key key){
 		try {
-			Cipher cipher = Cipher.getInstance("SHA-256");
+			Cipher cipher = Cipher.getInstance("RSA");
 			cipher.init(Cipher.WRAP_MODE, key);
 			
-			return cipher.wrap(keyToBeEncrypted).toString();
+			return cipher.wrap(keyToBeEncrypted);
 		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -90,10 +75,10 @@ public class Encryption {
 	
 	public static Key decryptKey(String keyToBeDecrypted, PrivateKey key){
 		try {
-			Cipher cipher = Cipher.getInstance("SHA-256");
+			Cipher cipher = Cipher.getInstance("RSA");
 			cipher.init(Cipher.UNWRAP_MODE, key);
 			
-			return (SecretKey) cipher.unwrap(keyToBeDecrypted.getBytes(), "SHA-256", Cipher.SECRET_KEY);
+			return (SecretKey) cipher.unwrap(keyToBeDecrypted.getBytes(), "AES", Cipher.SECRET_KEY);
 		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e) {
 			e.printStackTrace();
 		}
@@ -101,10 +86,10 @@ public class Encryption {
 		return null;
 	}
 	
-	private static byte[] doEncryptDecrypt(byte[] data, Key key, int mode){
+	private static byte[] doEncryptDecrypt(byte[] data, Key key, int mode, String algorithm){
 		if(mode == Cipher.ENCRYPT_MODE || mode == Cipher.DECRYPT_MODE){
 			try {
-				Cipher cipher = Cipher.getInstance("SHA-256");
+				Cipher cipher = Cipher.getInstance(algorithm);
 				cipher.init(mode, key);
 				
 				byte[] cipheredBytes = cipher.doFinal(data);

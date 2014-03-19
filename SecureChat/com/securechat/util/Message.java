@@ -9,17 +9,15 @@ import com.google.gson.Gson;
 public class Message {
 
 	// TODO: These properties will change depending on the encrypted data and how we want to send stuff
-	private String messageString;
-	private Key randomKey;
+	private byte[] payload;
+	private byte[] randomKey;
 	
 	/*
 	 *  TODO: The JSON'd instance of this class isn't the final thing we're sending, we must wrap this 
 	 *  in another class that contains source/destination/MessageType. This other class is not encrypted.
 	 */
 	
-	public Message(){
-		
-	}
+	public Message(){}
 	
 	public String createEncryptedMessageJSON(PublicKey pub, PrivateKey priv, String message){
 		
@@ -41,19 +39,20 @@ public class Message {
 		 */
 		
 		// Must use the Gson library to return a JSON string, we'll send that on the wire Gson.toJSON(this)
+		String messageJSON = new Gson().toJson(this);
 		
 		return null;
 	}
 	
-	public String getMessageString(){
-		return this.messageString;
+	public String getPayload(){
+		return this.payload.toString();
 	}
 	
-	public void setMessageString(String message){
-		this.messageString = message;
+	public void setMessageString(byte[] payload){
+		this.payload = payload;
 	}
 	
-	public Key getRandomKey(){
+	public byte[] getRandomKey(){
 		return this.randomKey;
 	}
 }
