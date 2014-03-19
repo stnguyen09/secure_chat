@@ -10,16 +10,18 @@ public class SecureChat {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		if(args.length != 2){
-			System.err.println("Argument error. Usage is arg[0] = 'server' || 'client', arg[1] = socketNumber");
+		if(args.length < 2 || args.length > 4){
+			System.err.println("Argument error. Usage is args[0] = 'server' || 'client', args[1] = port number");
+			System.err.println("If running 'client', args[2] = server hostname, args[3] = your name");
 			System.exit(0);
 		}
-	
-		int socketNumber = -1;
+		
+		// Parse the port number
+		int portNumber = -1;
 		try{
-			socketNumber = Integer.parseInt(args[1]);
+			portNumber = Integer.parseInt(args[1]);
 		} catch(NumberFormatException e){
-			System.err.println("Argument error. arg[1] is not a valid number.");
+			System.err.println("Argument error. args[1] is not a valid number.");
 			System.exit(0);
 		}
 		
@@ -27,10 +29,15 @@ public class SecureChat {
 		
 		switch(args[0].toLowerCase()){
 			case "client":
-				runner = new Thread(new ClientNode(socketNumber));
+				if(args.length != 4){
+					System.err.println("Invalid number of args. Usages is [server, client], [port number], [server hostname], [your name]");
+					System.exit(0);
+				}
+				
+				runner = new Thread(new ClientNode(args[2], portNumber, args[3]));
 				break;
 			case "server":
-				runner = new Thread(new Server(socketNumber));
+				runner = new Thread(new Server(portNumber));
 				break;
 			default:
 				System.err.println("Unknown first argument. Must either be 'client' or 'server'.");
