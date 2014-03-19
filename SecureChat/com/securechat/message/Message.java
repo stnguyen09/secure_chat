@@ -1,4 +1,4 @@
-package com.securechat.util;
+package com.securechat.message;
 
 import java.security.Key;
 import java.security.PrivateKey;
