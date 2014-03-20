@@ -44,11 +44,10 @@ public class Server implements Runnable{
 				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 				
 				// Add to the list of online people. Doesn't have a name yet until a handshake occurs.
-				activeConnections.putIfAbsent(sock, null);
+				activeConnections.putIfAbsent(sock, "");
 				
 				Thread clientHandlerThread = new Thread(new ClientHandler(sock));
-				clientHandlerThread.run();
-				
+				clientHandlerThread.run();	
 			}
 		} catch(SocketTimeoutException to){
 			System.out.println("Socket timed out");
@@ -83,6 +82,10 @@ public class Server implements Runnable{
 						// Associate the name with the socket
 						activeConnections.putIfAbsent(clientSocket, name);
 					}
+					else{
+						System.err.println("Duplicate name detected: " + name + ". Ignoring!");
+						return;
+					}
 					
 					handshakeMessage.setMessageType(MessageType.SERVER_STATUS);
 					handshakeMessage.setSource("server");
@@ -92,7 +95,7 @@ public class Server implements Runnable{
 					 */
 					handshakeMessage.setDestination(this.uniqueActiveNamesString());
 					
-					// Send the response
+					// Send the response. Handshake complete.
 					out.writeUTF(new Gson().toJson(handshakeMessage));
 					out.writeUTF("\\n");
 				} catch(Exception e){
@@ -103,7 +106,11 @@ public class Server implements Runnable{
 				}
 				
 				while(!clientSocket.isClosed()){
+					// TODO: Implement me!
 					
+					// Listen for messages using in.readLine()
+					
+					// When you get it, parse it, convert to object if necessary
 				}
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
