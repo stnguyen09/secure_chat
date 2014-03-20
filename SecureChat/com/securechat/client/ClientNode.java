@@ -7,8 +7,11 @@ import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.securechat.message.HandshakeMessage;
@@ -22,6 +25,7 @@ public class ClientNode implements Runnable{
 	
 	private static Socket socket;
 	private static Map<String, Key> trustedBuddies;
+	private static ArrayList<String> onlineBuddies;
 	private static String name;
 	private static KeyPair keys;
 	private static boolean handshakeMode;
@@ -34,6 +38,7 @@ public class ClientNode implements Runnable{
 			socket = new Socket(addr, socketNumber);
 			trustedBuddies = new HashMap<String, Key>();
 			handshakeMode = false;
+			onlineBuddies = new ArrayList<String>();
 		} catch(IOException e){
 			System.out.println(e.getMessage());
 			e.printStackTrace();
@@ -46,8 +51,8 @@ public class ClientNode implements Runnable{
 		
 		// Output the keys
 		// TODO: Remove this
-		System.out.println("Server: Your public key is (" + keys.getPublic().getEncoded() + ")");
-		System.out.println("Server: Your private key is (" + keys.getPrivate().getEncoded() + ")");
+		System.out.println("Your public key is (" + keys.getPublic().getEncoded() + ")");
+		System.out.println("Your private key is (" + keys.getPrivate().getEncoded() + ")");
 
 		while(true){
 			try {
@@ -76,6 +81,8 @@ public class ClientNode implements Runnable{
 				}
 				
 				if(hsResponse.getMessageType() == MessageType.SERVER_STATUS && hsResponse.getSource().equals("server")){
+					// Populate the list of online people
+					onlineBuddies = new ArrayList<String>(Arrays.asList(hsResponse.getDestination().split(",")));
 					
 					// New thread for actually sending messages
 					Thread sender = new Thread(new ClientMessageSender());
@@ -84,11 +91,14 @@ public class ClientNode implements Runnable{
 					receiver.start();
 					try {
 						sender.join(); // Join to the sending thread
-						receiver.start(); // Join to the receiver thread
+						receiver.join(); // Join to the receiver thread
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
 				}
+				
+				// Close and exit
+				socket.close();
 				break;
 			} catch (UnknownHostException u){
 				System.err.println("Client: Unable to find host for address");
@@ -121,9 +131,47 @@ public class ClientNode implements Runnable{
 						socket.close(); // Close the socket
 						break;
 					}
+					else if(data.equals("\\status")){
+						// Request the list of online users and update it
+						out.writeUTF("status");
+						// Wait for server response
+						String statusResponse = new BufferedReader(new InputStreamReader(socket.getInputStream())).readLine();
+						
+						String[] onlineArray = statusResponse.split(",");
+						for(String buddy : onlineArray){
+							if(!onlineBuddies.contains(buddy)){
+								onlineBuddies.add(buddy);
+							}
+						}
+					}
+					else if(data.equals("\\handshake")){
+						System.out.println("Which buddy do you want to handshake with?: ");
+						String handshakee = in.readLine();
+						
+						if(!onlineBuddies.contains(handshakee)){
+							System.out.println("That person is not online...");
+						}
+						else{
+							if(trustedBuddies.containsKey(handshakee)){
+								System.out.println("You already shook hands with this person...");
+							}
+							else{
+								// Send a request containing your public key
+								HandshakeMessage buddyHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, handshakee, name, keys.getPublic().getEncoded());
+								out.writeUTF(new Gson().toJson(buddyHandshake));
+								out.writeUTF("\\n");
+							}
+						}
+					}
 					else{
 						if(!handshakeMode){
 							for(Map.Entry<String, Key> entry : trustedBuddies.entrySet()){
+								if(!onlineBuddies.contains(entry.getKey())){
+									// If the buddy isn't online, remove him from trustedBuddies and move on
+									trustedBuddies.remove(entry.getKey());
+									continue;
+								}
+								
 								Key randomKey = Encryption.generateRandomKey();
 								
 								// Encrypt the message payload
@@ -178,7 +226,6 @@ public class ClientNode implements Runnable{
 						else if(receivedData.contains(MessageType.MESSAGE.toString())){
 							handshakeMode = false;
 							receivedMessage = new Gson().fromJson(receivedData, Message.class);
-							
 						}
 					} catch(JsonSyntaxException e){
 						e.printStackTrace();
@@ -205,7 +252,7 @@ public class ClientNode implements Runnable{
 								trustedBuddies.put(handshakeMessage.getSource(), publicKey);
 								
 								DataOutputStream handshakeOutput = new DataOutputStream(socket.getOutputStream());
-								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
+								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE_RESPONSE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
 								
 								handshakeOutput.writeUTF(outputHandshake.getJSON());
 								handshakeOutput.writeUTF("\\n");
