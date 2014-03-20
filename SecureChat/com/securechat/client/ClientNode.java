@@ -9,8 +9,10 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
@@ -24,8 +26,8 @@ import com.securechat.util.Encryption;
 public class ClientNode implements Runnable{
 	
 	private static Socket socket;
-	private static Map<String, Key> trustedBuddies;
-	private static ArrayList<String> onlineBuddies;
+	private static ConcurrentHashMap<String, Key> trustedBuddies;
+	private static List<String> onlineBuddies;
 	private static String name;
 	private static KeyPair keys;
 	private static boolean handshakeMode;
@@ -36,9 +38,9 @@ public class ClientNode implements Runnable{
 			name = clientName;
 			InetAddress addr = InetAddress.getByName(hostName);
 			socket = new Socket(addr, socketNumber);
-			trustedBuddies = new HashMap<String, Key>();
+			trustedBuddies = new ConcurrentHashMap<String, Key>();
 			handshakeMode = false;
-			onlineBuddies = new ArrayList<String>();
+			onlineBuddies = Collections.synchronizedList(new ArrayList<String>());
 		} catch(IOException e){
 			System.out.println(e.getMessage());
 			e.printStackTrace();
@@ -240,6 +242,12 @@ public class ClientNode implements Runnable{
 						// If the message received was a handshake request from another user
 						if(receivedMessage instanceof HandshakeMessage){
 							HandshakeMessage handshakeMessage = (HandshakeMessage) receivedMessage;
+							
+							// It's a response to a handshake you sent
+							if(handshakeMessage.getMessageType() == MessageType.HANDSHAKE_RESPONSE){
+								
+							}
+							
 							BufferedReader userInputReader = new BufferedReader(new InputStreamReader(System.in));
 							System.out.println("Incoming handshake from < " + handshakeMessage.getSource() + " >. Would you like to accept? Y/N");
 							
@@ -249,7 +257,7 @@ public class ClientNode implements Runnable{
 							if(response.toLowerCase().equals("y")){
 								// Get their public key and put it into the trusted buddies array
 								Key publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(handshakeMessage.getKey()));
-								trustedBuddies.put(handshakeMessage.getSource(), publicKey);
+								trustedBuddies.putIfAbsent(handshakeMessage.getSource(), publicKey);
 								
 								DataOutputStream handshakeOutput = new DataOutputStream(socket.getOutputStream());
 								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE_RESPONSE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
