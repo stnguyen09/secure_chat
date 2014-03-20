@@ -1,5 +1,7 @@
 package com.securechat.message;
 
+import com.google.gson.Gson;
+
 public class HandshakeMessage {
 
 	private MessageType messageType;
@@ -32,6 +34,10 @@ public class HandshakeMessage {
 			System.err.println("Wrong message type.");
 			return false;
 		}
+	}
+	
+	public String getJSON(){
+		return new Gson().toJson(this);
 	}
 	
 	public MessageType getMessageType(){
