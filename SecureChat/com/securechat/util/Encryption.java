@@ -5,7 +5,6 @@ import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
@@ -46,12 +45,12 @@ public class Encryption {
 		return null;
 	}
 	
-	public static byte[] encryptMessage(String message, Key key, String algorithm){
-		return doEncryptDecrypt(message.getBytes(), key, Cipher.ENCRYPT_MODE, algorithm);
+	public static byte[] encryptMessage(byte[] message, Key key, String algorithm){
+		return doEncryptDecrypt(message, key, Cipher.ENCRYPT_MODE, algorithm);
 	}
 	
-	public static byte[] decryptMessage(String message, Key key, String algorithm){	
-		return doEncryptDecrypt(message.getBytes(), key, Cipher.DECRYPT_MODE, algorithm);
+	public static byte[] decryptMessage(byte[] message, Key key, String algorithm){	
+		return doEncryptDecrypt(message, key, Cipher.DECRYPT_MODE, algorithm);
 	}
 	
 	/**

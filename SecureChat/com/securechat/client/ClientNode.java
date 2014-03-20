@@ -9,7 +9,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.HashMap;
 import java.util.Map;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.securechat.message.HandshakeMessage;
@@ -25,7 +24,7 @@ public class ClientNode implements Runnable{
 	private static Map<String, Key> trustedBuddies;
 	private static String name;
 	private static KeyPair keys;
-	private static boolean handshakeMode = false;
+	private static boolean handshakeMode;
 	
 	// This is responsible for receiving and decrypting messages
 	public ClientNode(String hostName, int socketNumber, String clientName){
@@ -34,6 +33,7 @@ public class ClientNode implements Runnable{
 			InetAddress addr = InetAddress.getByName(hostName);
 			socket = new Socket(addr, socketNumber);
 			trustedBuddies = new HashMap<String, Key>();
+			handshakeMode = false;
 		} catch(IOException e){
 			System.out.println(e.getMessage());
 			e.printStackTrace();
@@ -112,32 +112,45 @@ public class ClientNode implements Runnable{
 				DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 				BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
 				
-				// TODO: Handshake
-				
 				while(!socket.isClosed()){
 					String data = in.readLine();
 					if(data.equals("\\q")){
-						// TODO: Send a quit message to the server if necessary
-						
+						// Send quit message to the server so it's knows you're gone
+						out.writeUTF("quit");
 						out.writeUTF("\n");
 						socket.close(); // Close the socket
 						break;
 					}
 					else{
-						Message message = new Message();
-						byte[] encryptedData = Encryption.encryptMessage(data, Encryption.generateRandomKey(), "AES");
+						if(!handshakeMode){
+							for(Map.Entry<String, Key> entry : trustedBuddies.entrySet()){
+								Key randomKey = Encryption.generateRandomKey();
+								
+								// Encrypt the message payload
+								byte[] encryptedPayload = Encryption.encryptMessage(data.getBytes(), randomKey, "AES");
+								
+								// Encrypt the random key with the other person's public key
+								byte[] encryptedRandomKey = Encryption.encryptKey(randomKey, entry.getValue());
+								
+								Message messageToSend = new Message(encryptedPayload, encryptedRandomKey);
+								
+								// Encrypt the Message object json with your private key
+								byte[] encryptedMessage = Encryption.encryptMessage(new Gson().toJson(messageToSend).getBytes(), keys.getPrivate(), "RSA");
 
-						
-						
-						out.writeUTF("\n");
+								MessageContainer messageContainerToSend = new MessageContainer(encryptedMessage, name, entry.getKey(), MessageType.MESSAGE);
+								
+								// Send to the server
+								out.writeUTF(new Gson().toJson(messageContainerToSend));
+								out.writeUTF("\\n");
+							}
+						}
 					}
 				}
 			} catch(SocketTimeoutException to){
 				System.out.println("Socket timed out");
 			} catch(SocketException e){
 				System.out.print("Connection closed");
-			} 
-			catch(IOException e){
+			} catch(IOException e){
 				e.printStackTrace();
 			} 
 		}		
@@ -149,10 +162,9 @@ public class ClientNode implements Runnable{
 		
 		@Override
 		public void run() {
-			while(true){
+			while(!socket.isClosed()){
 				try {
 					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-					DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 					
 					String receivedData = in.readLine();
 					
@@ -185,6 +197,8 @@ public class ClientNode implements Runnable{
 							System.out.println("Incoming handshake from < " + handshakeMessage.getSource() + " >. Would you like to accept? Y/N");
 							
 							String response = userInputReader.readLine();
+							
+							// Respond to the handshake request
 							if(response.toLowerCase().equals("y")){
 								// Get their public key and put it into the trusted buddies array
 								Key publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(handshakeMessage.getKey()));
@@ -194,29 +208,33 @@ public class ClientNode implements Runnable{
 								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
 								
 								handshakeOutput.writeUTF(outputHandshake.getJSON());
+								handshakeOutput.writeUTF("\\n");
 								// Public key sent, handshake complete
 							}
 						}
 						else if(receivedMessage instanceof MessageContainer){
-		
-							String stringMessage = ((MessageContainer) receivedMessage).getMessage().toString();
+							byte[] byteMessage = ((MessageContainer) receivedMessage).getMessage();
+							String source = ((MessageContainer) receivedMessage).getSource();
 							
-							// Decrypt the Message in the MessageContainer
-							byte[] decryptedBytes = Encryption.decryptMessage(stringMessage, keys.getPrivate(), "RSA");
-							
+							// Decrypt the Message in the MessageContainer using own other person's public key (auth that they sent it)
+							byte[] decryptedBytes = Encryption.decryptMessage(byteMessage, trustedBuddies.get(source), "RSA");
+
+							// Transform the byte stream to an object
 							ByteArrayInputStream bis = new ByteArrayInputStream(decryptedBytes);
 							ObjectInputStream ois = new ObjectInputStream(bis);
 							Message message = (Message) ois.readObject();
 							
+							// Get the payload
 							byte[] payload = message.getPayload();
-							String source = ((MessageContainer) receivedMessage).getSource();
-							Key randomKey = Encryption.decryptKey(message.getRandomKey(), trustedBuddies.get(source));
 							
-							String decryptedPayload = Encryption.decryptMessage(payload.toString(), randomKey, "AES").toString();
+							// Unwrap the random key using your own private key (ensures only you can decrypt it)
+							Key randomKey = Encryption.decryptKey(message.getRandomKey(), keys.getPrivate());
+							
+							// Decrypt and output the string in the payload
+							String decryptedPayload = Encryption.decryptMessage(payload, randomKey, "AES").toString();
 							System.out.println(source + "> " + decryptedPayload);
 						}
 					}
-					
 				} catch (IOException e) {
 					e.printStackTrace();
 					break;
@@ -229,7 +247,9 @@ public class ClientNode implements Runnable{
 				} catch (ClassNotFoundException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				}		
+				} finally {
+					handshakeMode = false;
+				}
 			}
 			
 		}
