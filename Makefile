@@ -5,7 +5,7 @@ JC = javac
 	$(JC) $(JFLAGS) $*.java
 
 CLASSES = \
-	Server.java RSACracker.java
+	SecureChat.java
 
 default: classes
 
@@ -14,8 +14,8 @@ classes: $(CLASSES:.java=.class)
 clean:
 	$(RM) *.class
 	
-run:
-	java Server 2012
+server:
+	java SecureChat server 2014
 	
-crack:
-	java RSACracker
+client:
+	java RSACracker client 2014 localhost steve
