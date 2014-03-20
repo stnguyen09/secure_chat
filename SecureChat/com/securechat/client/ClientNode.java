@@ -1,199 +1,239 @@
 package com.securechat.client;
 import java.io.*;
 import java.net.*;
+import java.security.Key;
+import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.HashMap;
+import java.util.Map;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.securechat.message.HandshakeMessage;
+import com.securechat.message.Message;
+import com.securechat.message.MessageContainer;
+import com.securechat.message.MessageType;
 import com.securechat.util.Encryption;
 
 
 public class ClientNode implements Runnable{
 	
-	private ServerSocket serverSocket;
+	private static Socket socket;
+	private static Map<String, Key> trustedBuddies;
+	private static String name;
+	private static KeyPair keys;
+	private static boolean handshakeMode = false;
 	
 	// This is responsible for receiving and decrypting messages
-	public ClientNode(int socketNumber){
+	public ClientNode(String hostName, int socketNumber, String clientName){
 		try{
-			serverSocket = new ServerSocket(socketNumber);
+			name = clientName;
+			InetAddress addr = InetAddress.getByName(hostName);
+			socket = new Socket(addr, socketNumber);
+			trustedBuddies = new HashMap<String, Key>();
 		} catch(IOException e){
 			System.out.println(e.getMessage());
 			e.printStackTrace();
 		}
 	}
 	
-	public void run(){
-		try{
-			
-			// Computes new keys each time you run
-			KeyPair keys = Encryption.generateKeyPair();
-			
-			// Output the keys
-			// TODO: Remove this
-			System.out.println("Server: Your public key is (" + keys.getPublic().getEncoded() + ")");
-			System.out.println("Server: Your private key is (" + keys.getPrivate().getEncoded() + ")");
-			
-			while(true){
-				System.out.println("Waiting for client on port " + serverSocket.getLocalPort() + "...");
-				Socket sock = serverSocket.accept(); // Accept new connection
-				System.out.println("Connected to " + sock.getRemoteSocketAddress());
-				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+	public void run(){		
+		// Computes new keys each time you run
+		keys = Encryption.generateKeyPair();
+		
+		// Output the keys
+		// TODO: Remove this
+		System.out.println("Server: Your public key is (" + keys.getPublic().getEncoded() + ")");
+		System.out.println("Server: Your private key is (" + keys.getPrivate().getEncoded() + ")");
+
+		while(true){
+			try {
+				System.out.println("Connected to " + socket.getRemoteSocketAddress() + " on port " + socket.getPort());
 				
-				while(true){
-					try{
-						String message = in.readLine();
-						if(message.equals("\\q")){ // The agreed upon quit input
-							stopSending = true;
-							break;
-						}
-						else{
-							String[] array = message.split(" "); // The message comes in as 123 456 789, so split it
-							System.out.println(message);
-							for(int i=0; i<array.length-1; i++){
-								int value = (int) Double.parseDouble(array[i]);
-								System.out.print(rsa.decrypt(value, myPrivateKey, myC)); // Decrypt character and print it
-							}
-							System.out.println();		
-						}
-					} catch(NullPointerException e){
-						break;
-					} catch(NumberFormatException e){
-						e.printStackTrace();
-					}
+				// Initial handshake
+				BufferedReader handShakeReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+				DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+				
+				HandshakeMessage initialServerHS = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, null, name, keys.getPublic().getEncoded());
+				String handShakeJson = initialServerHS.getJSON();
+				
+				System.out.println(handShakeJson);
+				
+				out.writeUTF(handShakeJson);
+				
+				// Blocks until the server responds
+				String response = handShakeReader.readLine();
+				HandshakeMessage hsResponse = null;
+				
+				try{
+					hsResponse = new Gson().fromJson(response, HandshakeMessage.class);
+				} catch(JsonSyntaxException e){
+					System.err.println("Invalid json format. Handshake failed. Exiting.");
+					System.exit(0);
 				}
-			}
-		} catch(SocketTimeoutException to){
-			System.out.println("Socket timed out");
-		} catch(IOException e){
-			System.out.println(e.getMessage());
-			e.printStackTrace();
-		}
-	}
-	
-	/*
-	 * args = {socket number}
-	 */
-	public static void main(String args[]) // args[0] should be the socket you want to listen on
-	{
-		int socket = 2012;
-		if(args.length > 1 || args.length == 0){
-			System.err.println("Too many arguments passed, should only pass the port you wish to open");
-		}
-		else{
-			socket = Integer.parseInt(args[0]);
-		}
-
-		// Create the threads and start them
-		client = new Client();
-		server = new ClientNode(socket);
-		Thread clientThread = new Thread(client);
-		Thread serverThread = new Thread(server);
-		clientThread.start();
-		serverThread.start();
-		
-		// Join to the threads
-		try {
-			clientThread.join();
-			serverThread.join();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	// This is responsible for encryption and sending messages
-	private static class Client implements Runnable{
-		private static int theirPublicKey;
-		private static int theirKeyC;
-		private static Socket s;
-
-		public Client(){}
-		
-		@Override
-		public void run() {
-			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-
-			while(true){
-				try {
-					// Prompt for the IP address
-					System.out.println("Client: Please input the address of the person you wish to connect to: ");
-					String input = br.readLine();
-					InetAddress addr = InetAddress.getByName(input);
+				
+				if(hsResponse.getMessageType() == MessageType.SERVER_STATUS && hsResponse.getSource().equals("server")){
 					
-					// Prompt for the port number
-					System.out.println("Client: Please input the port number: ");
-					int port = Integer.parseInt(br.readLine());
-					
-					// Make the connection
-					s = new Socket(addr, port);
-					System.out.println("Connected to " + s.getRemoteSocketAddress() + " on port " + s.getPort());
-					
-					// Input of partner's public key
-					System.out.println("Client: Please input your partner's public key separated by a space. For example: 123 456: ");
-					String[] keys = br.readLine().split(" ");
-					theirPublicKey = Integer.parseInt(keys[0]);
-					theirKeyC = Integer.parseInt(keys[1]);
-					System.out.println("You may now type your messages");
-					
-					// New thread for actually sending the messages
-					Thread sender = new Thread(new MessageSender(s));
+					// New thread for actually sending messages
+					Thread sender = new Thread(new ClientMessageSender());
+					Thread receiver = new Thread(new ClientMessageReceiver());
 					sender.start();
+					receiver.start();
 					try {
 						sender.join(); // Join to the sending thread
+						receiver.start(); // Join to the receiver thread
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
-				} catch (UnknownHostException u){
-					System.err.println("Client: Unable to find host for address");
-				} catch (IOException e) {
-					e.printStackTrace();
-				} catch (NumberFormatException n){
-					System.out.println("Client: Invalid integer for the port number");
-				} catch (NullPointerException e){
-					break;
 				}
+				break;
+			} catch (UnknownHostException u){
+				System.err.println("Client: Unable to find host for address");
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (NumberFormatException n){
+				System.out.println("Client: Invalid integer for the port number");
+			} catch (NullPointerException e){
+				break;
 			}
 		}
+	}
 		
-		private static class MessageSender implements Runnable{
-			private Socket sock;
-			
-			public MessageSender(Socket sock){
-				this.sock = sock;
-			}
-			
-			@Override
-			public void run() {
-				try{
-					DataOutputStream out = new DataOutputStream(sock.getOutputStream());
-					BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+	private static class ClientMessageSender implements Runnable{
+		
+		public ClientMessageSender(){}
+		
+		@Override
+		public void run() {
+			try{
+				DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+				BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+				
+				// TODO: Handshake
+				
+				while(!socket.isClosed()){
+					String data = in.readLine();
+					if(data.equals("\\q")){
+						// TODO: Send a quit message to the server if necessary
+						
+						out.writeUTF("\n");
+						socket.close(); // Close the socket
+						break;
+					}
+					else{
+						Message message = new Message();
+						byte[] encryptedData = Encryption.encryptMessage(data, Encryption.generateRandomKey(), "AES");
+
+						
+						
+						out.writeUTF("\n");
+					}
+				}
+			} catch(SocketTimeoutException to){
+				System.out.println("Socket timed out");
+			} catch(SocketException e){
+				System.out.print("Connection closed");
+			} 
+			catch(IOException e){
+				e.printStackTrace();
+			} 
+		}		
+	}
+	
+	private static class ClientMessageReceiver implements Runnable{
+		
+		public ClientMessageReceiver(){}
+		
+		@Override
+		public void run() {
+			while(true){
+				try {
+					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+					DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 					
-					while(!s.isClosed() && !stopSending){
-						String message = in.readLine();
-						if(message.equals("\\q")){
-							out.writeUTF(message);
-							out.writeUTF("\n");
-							s.close(); // Close the socket
-							break;
+					String receivedData = in.readLine();
+					
+					Object receivedMessage = null;
+					try{
+						if(receivedData.contains(MessageType.HANDSHAKE.toString())){
+							handshakeMode = true;
+							receivedMessage = new Gson().fromJson(receivedData, HandshakeMessage.class);
+							
 						}
-						else{
-							// Break the message into characters, encrypt each character, add it to a string, and send the whole thing
-							char[] array = message.toCharArray();
-							StringBuilder sb = new StringBuilder();
-							for(int i=0; i<array.length; i++){
-								sb.append(Integer.toString(rsa.encrypt(array[i], theirPublicKey, theirKeyC)) + " ");
+						else if(receivedData.contains(MessageType.MESSAGE.toString())){
+							handshakeMode = false;
+							receivedMessage = new Gson().fromJson(receivedData, Message.class);
+							
+						}
+					} catch(JsonSyntaxException e){
+						e.printStackTrace();
+					}
+					
+					if(receivedMessage == null){
+						// Something got messed up, quit this iteration and listen again
+						handshakeMode = false;
+						continue;
+					}
+					else{
+						// If the message received was a handshake request from another user
+						if(receivedMessage instanceof HandshakeMessage){
+							HandshakeMessage handshakeMessage = (HandshakeMessage) receivedMessage;
+							BufferedReader userInputReader = new BufferedReader(new InputStreamReader(System.in));
+							System.out.println("Incoming handshake from < " + handshakeMessage.getSource() + " >. Would you like to accept? Y/N");
+							
+							String response = userInputReader.readLine();
+							if(response.toLowerCase().equals("y")){
+								// Get their public key and put it into the trusted buddies array
+								Key publicKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(handshakeMessage.getKey()));
+								trustedBuddies.put(handshakeMessage.getSource(), publicKey);
+								
+								DataOutputStream handshakeOutput = new DataOutputStream(socket.getOutputStream());
+								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
+								
+								handshakeOutput.writeUTF(outputHandshake.getJSON());
+								// Public key sent, handshake complete
 							}
-							out.writeUTF(sb.toString());
-							out.writeUTF("\n");
+						}
+						else if(receivedMessage instanceof MessageContainer){
+		
+							String stringMessage = ((MessageContainer) receivedMessage).getMessage().toString();
+							
+							// Decrypt the Message in the MessageContainer
+							byte[] decryptedBytes = Encryption.decryptMessage(stringMessage, keys.getPrivate(), "RSA");
+							
+							ByteArrayInputStream bis = new ByteArrayInputStream(decryptedBytes);
+							ObjectInputStream ois = new ObjectInputStream(bis);
+							Message message = (Message) ois.readObject();
+							
+							byte[] payload = message.getPayload();
+							String source = ((MessageContainer) receivedMessage).getSource();
+							Key randomKey = Encryption.decryptKey(message.getRandomKey(), trustedBuddies.get(source));
+							
+							String decryptedPayload = Encryption.decryptMessage(payload.toString(), randomKey, "AES").toString();
+							System.out.println(source + "> " + decryptedPayload);
 						}
 					}
-				} catch(SocketTimeoutException to){
-					System.out.println("Socket timed out");
-				} catch(SocketException e){
-					System.out.print("Connection closed");
-				} 
-				catch(IOException e){
+					
+				} catch (IOException e) {
 					e.printStackTrace();
-				} 
-			}		
+					break;
+				} catch (InvalidKeySpecException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (NoSuchAlgorithmException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (ClassNotFoundException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}		
+			}
+			
 		}
+	
 	}
 
 }

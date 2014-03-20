@@ -73,12 +73,12 @@ public class Encryption {
 		return null;
 	}
 	
-	public static Key decryptKey(String keyToBeDecrypted, PrivateKey key){
+	public static Key decryptKey(byte[] keyToBeDecrypted, Key key){
 		try {
 			Cipher cipher = Cipher.getInstance("RSA");
 			cipher.init(Cipher.UNWRAP_MODE, key);
 			
-			return (SecretKey) cipher.unwrap(keyToBeDecrypted.getBytes(), "AES", Cipher.SECRET_KEY);
+			return (SecretKey) cipher.unwrap(keyToBeDecrypted, "AES", Cipher.SECRET_KEY);
 		} catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException e) {
 			e.printStackTrace();
 		}

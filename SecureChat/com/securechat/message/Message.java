@@ -1,10 +1,7 @@
 package com.securechat.message;
 
-import java.security.Key;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-
-import com.google.gson.Gson;
 
 public class Message {
 
@@ -39,13 +36,13 @@ public class Message {
 		 */
 		
 		// Must use the Gson library to return a JSON string, we'll send that on the wire Gson.toJSON(this)
-		String messageJSON = new Gson().toJson(this);
+
 		
 		return null;
 	}
 	
-	public String getPayload(){
-		return this.payload.toString();
+	public byte[] getPayload(){
+		return this.payload;
 	}
 	
 	public void setMessageString(byte[] payload){
