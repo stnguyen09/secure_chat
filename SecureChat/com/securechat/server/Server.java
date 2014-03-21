@@ -4,12 +4,12 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonSyntaxException;
 import com.securechat.message.HandshakeMessage;
 import com.securechat.message.MessageType;
 
@@ -110,12 +110,21 @@ public class Server implements Runnable{
 				}
 				
 				while(!clientSocket.isClosed()){
-					System.out.println(in.readUTF());
-					// TODO: Implement me!
-					
-					// Listen for messages using in.readLine()
-					
-					// When you get it, parse it, convert to object if necessary
+					String clientMessage = in.readUTF();
+					JsonParser parseMe = new JsonParser();
+					JsonObject newMessage = parseMe.parse(clientMessage).getAsJsonObject();
+
+					String destination = newMessage.get("destination").getAsString();
+
+					for(Map.Entry<Socket, String> entry : activeConnections.entrySet()){
+						if(entry.getValue().equals(destination)){
+							DataOutputStream dos = new DataOutputStream(entry.getKey().getOutputStream());
+
+							dos.writeUTF(clientMessage);
+							dos.writeUTF("\n");
+
+						}
+					}
 				}
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
