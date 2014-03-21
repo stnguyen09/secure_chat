@@ -70,7 +70,7 @@ public class ClientNode implements Runnable{
 				HandshakeMessage initialServerHS = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, null, name, keys.getPublic().getEncoded());
 				String handShakeJson = initialServerHS.getJSON();
 				
-				System.out.println(handShakeJson);
+				//System.out.println(handShakeJson);
 				out.writeUTF(handShakeJson);
 				
 				// Blocks until the server responds
@@ -226,10 +226,15 @@ public class ClientNode implements Runnable{
 					DataInputStream in = new DataInputStream(socket.getInputStream());
 					
 					String receivedData = in.readUTF();
-					JsonParser parser = new JsonParser();
-					JsonObject handshakeObj = parser.parse(receivedData).getAsJsonObject();
-					
+					System.out.println(receivedData);
+				
 					Object receivedMessage = null;
+					
+					JsonObject handshakeObj = null;
+					if(!receivedData.equals("\n")){
+					JsonParser parser = new JsonParser();
+					handshakeObj = parser.parse(receivedData).getAsJsonObject();
+					
 					try{
 						if(handshakeObj.get("MessageType").equals(MessageType.HANDSHAKE)){
 							handshakeMode = true;
@@ -243,7 +248,7 @@ public class ClientNode implements Runnable{
 					} catch(JsonSyntaxException e){
 						e.printStackTrace();
 					}
-					
+					}
 					if(receivedMessage == null){
 						// Something got messed up, quit this iteration and listen again
 						handshakeMode = false;
@@ -312,7 +317,9 @@ public class ClientNode implements Runnable{
 				} catch (ClassNotFoundException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				} finally {
+				} catch (Exception e){
+					e.printStackTrace();
+				}finally{
 					handshakeMode = false;
 				}
 			}

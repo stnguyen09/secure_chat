@@ -48,7 +48,7 @@ public class Server implements Runnable{
 				activeConnections.putIfAbsent(sock, "");
 				
 				Thread clientHandlerThread = new Thread(new ClientHandler(sock));
-				clientHandlerThread.run();	
+				clientHandlerThread.start();
 			}
 		} catch(SocketTimeoutException to){
 			System.out.println("Socket timed out");
@@ -110,6 +110,7 @@ public class Server implements Runnable{
 				}
 				
 				while(!clientSocket.isClosed()){
+					System.out.println(in.readUTF());
 					// TODO: Implement me!
 					
 					// Listen for messages using in.readLine()
