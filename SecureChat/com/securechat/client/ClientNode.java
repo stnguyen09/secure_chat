@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.securechat.message.HandshakeMessage;
 import com.securechat.message.Message;
@@ -61,22 +63,25 @@ public class ClientNode implements Runnable{
 				System.out.println("Connected to " + socket.getRemoteSocketAddress() + " on port " + socket.getPort());
 				
 				// Initial handshake
-				BufferedReader handShakeReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+				DataInputStream in = new DataInputStream(socket.getInputStream());
+				
 				
 				HandshakeMessage initialServerHS = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, null, name, keys.getPublic().getEncoded());
 				String handShakeJson = initialServerHS.getJSON();
 				
 				System.out.println(handShakeJson);
-				
 				out.writeUTF(handShakeJson);
 				
 				// Blocks until the server responds
-				String response = handShakeReader.readLine();
+				String response = in.readUTF();
 				HandshakeMessage hsResponse = null;
 				
+				JsonParser parser = new JsonParser();
+				JsonObject handshakeObj = parser.parse(response).getAsJsonObject();
+
 				try{
-					hsResponse = new Gson().fromJson(response, HandshakeMessage.class);
+					hsResponse = new Gson().fromJson(handshakeObj, HandshakeMessage.class);
 				} catch(JsonSyntaxException e){
 					System.err.println("Invalid json format. Handshake failed. Exiting.");
 					System.exit(0);
@@ -85,6 +90,8 @@ public class ClientNode implements Runnable{
 				if(hsResponse.getMessageType() == MessageType.SERVER_STATUS && hsResponse.getSource().equals("server")){
 					// Populate the list of online people
 					onlineBuddies = new ArrayList<String>(Arrays.asList(hsResponse.getDestination().split(",")));
+					
+					System.out.println(onlineBuddies.size());
 					
 					// New thread for actually sending messages
 					Thread sender = new Thread(new ClientMessageSender());
@@ -98,10 +105,6 @@ public class ClientNode implements Runnable{
 						e.printStackTrace();
 					}
 				}
-				
-				// Close and exit
-				socket.close();
-				break;
 			} catch (UnknownHostException u){
 				System.err.println("Client: Unable to find host for address");
 			} catch (IOException e) {
@@ -109,8 +112,16 @@ public class ClientNode implements Runnable{
 			} catch (NumberFormatException n){
 				System.out.println("Client: Invalid integer for the port number");
 			} catch (NullPointerException e){
+				e.printStackTrace();
 				break;
-			}
+			} 
+		}
+		
+		// Close and exit
+		try {
+			socket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 		
@@ -121,6 +132,7 @@ public class ClientNode implements Runnable{
 		@Override
 		public void run() {
 			try{
+				System.out.println("I successfully handshaked.");
 				DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 				BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
 				
@@ -129,7 +141,6 @@ public class ClientNode implements Runnable{
 					if(data.equals("\\q")){
 						// Send quit message to the server so it's knows you're gone
 						out.writeUTF("quit");
-						out.writeUTF("\n");
 						socket.close(); // Close the socket
 						break;
 					}
@@ -137,7 +148,7 @@ public class ClientNode implements Runnable{
 						// Request the list of online users and update it
 						out.writeUTF("status");
 						// Wait for server response
-						String statusResponse = new BufferedReader(new InputStreamReader(socket.getInputStream())).readLine();
+						String statusResponse = new DataInputStream(socket.getInputStream()).readUTF();
 						
 						String[] onlineArray = statusResponse.split(",");
 						for(String buddy : onlineArray){
@@ -161,7 +172,6 @@ public class ClientNode implements Runnable{
 								// Send a request containing your public key
 								HandshakeMessage buddyHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE, handshakee, name, keys.getPublic().getEncoded());
 								out.writeUTF(new Gson().toJson(buddyHandshake));
-								out.writeUTF("\\n");
 							}
 						}
 					}
@@ -191,7 +201,6 @@ public class ClientNode implements Runnable{
 								
 								// Send to the server
 								out.writeUTF(new Gson().toJson(messageContainerToSend));
-								out.writeUTF("\\n");
 							}
 						}
 					}
@@ -263,7 +272,6 @@ public class ClientNode implements Runnable{
 								HandshakeMessage outputHandshake = HandshakeMessage.createHandshakeMessage(MessageType.HANDSHAKE_RESPONSE, handshakeMessage.getSource(), name, keys.getPublic().getEncoded());
 								
 								handshakeOutput.writeUTF(outputHandshake.getJSON());
-								handshakeOutput.writeUTF("\\n");
 								// Public key sent, handshake complete
 							}
 						}

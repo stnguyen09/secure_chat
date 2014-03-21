@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.securechat.message.HandshakeMessage;
 import com.securechat.message.MessageType;
@@ -41,7 +43,6 @@ public class Server implements Runnable{
 				System.out.println("Waiting for client on port " + serverSocket.getLocalPort() + "...");
 				Socket sock = serverSocket.accept(); // Accept new connection
 				System.out.println("Connected to " + sock.getRemoteSocketAddress());
-				BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 				
 				// Add to the list of online people. Doesn't have a name yet until a handshake occurs.
 				activeConnections.putIfAbsent(sock, "");
@@ -68,13 +69,16 @@ public class Server implements Runnable{
 		@Override
 		public void run() {
 			try {
-				BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+				DataInputStream in = new DataInputStream(clientSocket.getInputStream());
 				DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
 				
 				// Listen for handshake from this socket
-				String handshakeString = in.readLine();
+				String handshakeString = in.readUTF();
+				JsonParser parser = new JsonParser();
+				JsonObject handshakeObj = parser.parse(handshakeString).getAsJsonObject();
+				
 				try{
-					HandshakeMessage handshakeMessage = new Gson().fromJson(handshakeString, HandshakeMessage.class);
+					HandshakeMessage handshakeMessage = new Gson().fromJson(handshakeObj, HandshakeMessage.class);
 					String name = handshakeMessage.getSource();
 					
 					if(!uniqueActiveNames.contains(name)){
@@ -97,7 +101,7 @@ public class Server implements Runnable{
 					
 					// Send the response. Handshake complete.
 					out.writeUTF(new Gson().toJson(handshakeMessage));
-					out.writeUTF("\\n");
+					out.writeUTF("\n");
 				} catch(Exception e){
 					// If we fail the handshake, close the thread
 					// Any exception thrown here counts as a failure. Clean up and return.

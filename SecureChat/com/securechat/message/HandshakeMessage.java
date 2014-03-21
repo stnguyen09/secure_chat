@@ -27,7 +27,7 @@ public class HandshakeMessage {
 	}
 	
 	private static boolean isValidMessageType(MessageType type){
-		if(type == MessageType.HANDSHAKE || type == MessageType.HANDSHAKE_RESPONSE){
+		if(type == MessageType.HANDSHAKE || type == MessageType.HANDSHAKE_RESPONSE || type == MessageType.SERVER_STATUS){
 			return true;
 		}
 		else{
