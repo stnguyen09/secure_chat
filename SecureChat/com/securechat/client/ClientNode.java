@@ -233,12 +233,12 @@ public class ClientNode implements Runnable{
 					try{
 						if(handshakeObj.get("MessageType").equals(MessageType.HANDSHAKE)){
 							handshakeMode = true;
-							receivedMessage = new Gson().fromJson(receivedData, HandshakeMessage.class);
+							receivedMessage = new Gson().fromJson(handshakeObj, HandshakeMessage.class);
 							
 						}
 						else if(handshakeObj.get("MessageType").equals(MessageType.MESSAGE)){
 							handshakeMode = false;
-							receivedMessage = new Gson().fromJson(receivedData, Message.class);
+							receivedMessage = new Gson().fromJson(handshakeObj, Message.class);
 						}
 					} catch(JsonSyntaxException e){
 						e.printStackTrace();
@@ -256,7 +256,7 @@ public class ClientNode implements Runnable{
 							
 							// It's a response to a handshake you sent
 							if(handshakeMessage.getMessageType() == MessageType.HANDSHAKE_RESPONSE){
-								
+								// TODO: Implement
 							}
 							
 							BufferedReader userInputReader = new BufferedReader(new InputStreamReader(System.in));
