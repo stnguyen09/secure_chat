@@ -223,18 +223,20 @@ public class ClientNode implements Runnable{
 		public void run() {
 			while(!socket.isClosed()){
 				try {
-					BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+					DataInputStream in = new DataInputStream(socket.getInputStream());
 					
-					String receivedData = in.readLine();
+					String receivedData = in.readUTF();
+					JsonParser parser = new JsonParser();
+					JsonObject handshakeObj = parser.parse(receivedData).getAsJsonObject();
 					
 					Object receivedMessage = null;
 					try{
-						if(receivedData.contains(MessageType.HANDSHAKE.toString())){
+						if(handshakeObj.get("MessageType").equals(MessageType.HANDSHAKE)){
 							handshakeMode = true;
 							receivedMessage = new Gson().fromJson(receivedData, HandshakeMessage.class);
 							
 						}
-						else if(receivedData.contains(MessageType.MESSAGE.toString())){
+						else if(handshakeObj.get("MessageType").equals(MessageType.MESSAGE)){
 							handshakeMode = false;
 							receivedMessage = new Gson().fromJson(receivedData, Message.class);
 						}
